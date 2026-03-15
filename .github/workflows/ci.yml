@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI workflow: builds both ARM64 images on every push to main and on pull
+# requests. Images are loaded locally (not pushed to any registry) to verify
+# that the build succeeds.
+#
+# Note: QEMU-emulated arm64 builds on GitHub's x86_64 runners are slow.
+# The Ice 3.6.5 compilation stage takes ~60-90 minutes. The workflow uses
+# GitHub Actions cache for Docker layers to speed up subsequent runs.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build ARM64 images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers (server)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-server
+          key: buildx-server-${{ github.sha }}
+          restore-keys: buildx-server-
+
+      - name: Cache Docker layers (web)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-web
+          key: buildx-web-${{ github.sha }}
+          restore-keys: buildx-web-
+
+      - name: Clone upstream repos
+        run: python3 build.py --server-only --no-cache 2>&1 | head -20 || true
+        # We only need the clone step; actual build uses docker/build-push-action below
+
+      - name: Clone upstream repos (both)
+        run: |
+          mkdir -p _build
+          git clone --depth 1 https://github.com/ome/omero-server-docker.git _build/omero-server-docker
+          git clone --depth 1 https://github.com/ome/omero-web-docker.git _build/omero-web-docker
+
+      - name: Build omero-server (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: _build/omero-server-docker
+          file: dockerfiles/omero-server.Dockerfile
+          platforms: linux/arm64
+          push: false
+          tags: ghcr.io/simonhard/omero-server-arm64:ci
+          build-args: |
+            OMERO_VERSION=5.6.17
+          cache-from: type=local,src=/tmp/.buildx-cache-server
+          cache-to: type=local,dest=/tmp/.buildx-cache-server-new,mode=max
+
+      - name: Build omero-web (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: _build/omero-web-docker
+          file: dockerfiles/omero-web.Dockerfile
+          platforms: linux/arm64
+          push: false
+          tags: ghcr.io/simonhard/omero-web-arm64:ci
+          cache-from: type=local,src=/tmp/.buildx-cache-web
+          cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
+
+      # Rotate cache to avoid unbounded growth
+      - name: Rotate cache
+        run: |
+          rm -rf /tmp/.buildx-cache-server /tmp/.buildx-cache-web
+          mv /tmp/.buildx-cache-server-new /tmp/.buildx-cache-server
+          mv /tmp/.buildx-cache-web-new /tmp/.buildx-cache-web
