@@ -96,12 +96,14 @@ RUN find /opt/setup/roles -name '*.yml' -exec \
     echo '---' > /opt/setup/roles/ome.deploy_archive/tasks/main.yml
 
 # Run Ansible provisioning and clean up in the same layer.
-RUN ansible-playbook playbook.yml -vvv \
+# Fix /etc/shadow permissions so PAM/sudo works in buildx (e.g. GitHub Actions).
+RUN chmod 0400 /etc/shadow 2>/dev/null || true && \
+    TMPDIR=/var/tmp ansible-playbook playbook.yml -vvv \
       -e 'ansible_python_interpreter=/usr/bin/python3' \
       -e omero_server_release=$OMERO_VERSION \
       -e omero_server_omego_additional_args="$OMEGO_ADDITIONAL_ARGS" && \
     dnf -y clean all && \
-    rm -fr /var/cache
+    rm -fr /var/cache /tmp/* /var/tmp/ansible-*
 
 # Install dumb-init for the correct architecture.
 ARG TARGETARCH
