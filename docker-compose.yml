@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${OMERO_DB_USER:-omero}
-      POSTGRES_PASSWORD: ${OMERO_DB_PASS:?OMERO_DB_PASS is required}
+      POSTGRES_PASSWORD: $${OMERO_DB_PASS:?OMERO_DB_PASS is required}
       POSTGRES_DB: ${OMERO_DB_NAME:-omero}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -35,11 +35,11 @@ services:
     platform: linux/arm64
     environment:
       CONFIG_omero_db_user: ${OMERO_DB_USER:-omero}
-      CONFIG_omero_db_pass: ${OMERO_DB_PASS:?OMERO_DB_PASS is required}
+      CONFIG_omero_db_pass: $${OMERO_DB_PASS:?OMERO_DB_PASS is required}
       CONFIG_omero_db_name: ${OMERO_DB_NAME:-omero}
       CONFIG_omero_db_host: postgres
       CONFIG_omero_certificates_commonname: omero-server
-      ROOTPASS: ${OMERO_ROOT_PASS:?OMERO_ROOT_PASS is required}
+      ROOTPASS: $${OMERO_ROOT_PASS:?OMERO_ROOT_PASS is required}
     volumes:
       - omero-data:/OMERO
     networks:
@@ -60,7 +60,7 @@ services:
         [["omero-server", 4064, "omero-server"]]
       CONFIG_omero_web_cors__origin__whitelist: '["127.0.0.1:8094"]'
       CONFIG_omero_web_application__server_host: 0.0.0.0
-      CONFIG_omero_web_csrf__trusted__origins: ${OMERO_WEB_CSRF_TRUSTED_ORIGINS:-'["http://127.0.0.1:8094","http://localhost:8094"]'}
+      # CONFIG_omero_web_csrf__trusted__origins: ${OMERO_WEB_CSRF_TRUSTED_ORIGINS:-'["http://127.0.0.1:8094","http://localhost:8094"]'}
     networks:
       - omero-network
     depends_on:
